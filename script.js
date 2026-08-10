@@ -4,20 +4,10 @@ document.addEventListener("DOMContentLoaded", () => {
   // ELEMENTS
   // =========================================================
 
-  const form =
-    document.getElementById("emailForm");
-
-  const emailInput =
-    document.getElementById("email");
-
-  const success =
-    document.getElementById("emailSuccess");
-
-  const gateNotice =
-    document.getElementById("gateNotice");
-
-  const membershipGate =
-    document.getElementById("membershipGate");
+  const form = document.getElementById("emailForm");
+  const emailInput = document.getElementById("email");
+  const success = document.getElementById("emailSuccess");
+  const gateNotice = document.getElementById("gateNotice");
 
   const paymentButtons =
     document.querySelectorAll("[data-payment]");
@@ -31,92 +21,57 @@ document.addEventListener("DOMContentLoaded", () => {
     console.error(
       "FuturesMove: email form not found."
     );
-
     return;
   }
 
 
   // =========================================================
-  // PAYMENT ACCESS CONTROL
-  // =========================================================
-
-  function setPaymentAccess(unlocked) {
-
-    paymentButtons.forEach((button) => {
-
-      button.disabled = !unlocked;
-
-      button.classList.toggle(
-        "locked",
-        !unlocked
-      );
-
-      button.setAttribute(
-        "aria-disabled",
-        String(!unlocked)
-      );
-
-    });
-
-
-    if (membershipGate) {
-
-      membershipGate.classList.toggle(
-        "unlocked",
-        unlocked
-      );
-
-
-      if (unlocked) {
-
-        membershipGate.textContent =
-          "✓ Email confirmed — your secure membership options are unlocked.";
-
-      } else {
-
-        membershipGate.textContent =
-          "🔒 Enter your email above to unlock secure payment access.";
-
-      }
-
-    }
-
-  }
-
-
-  // =========================================================
-  // REQUIRE EMAIL
+  // SHOW EMAIL GATE
   // =========================================================
 
   function requireEmail() {
 
     if (gateNotice) {
+
       gateNotice.classList.add("show");
-    }
 
-
-    const invitation =
-      document.getElementById(
-        "invitation"
-      );
-
-
-    if (invitation) {
-
-      invitation.scrollIntoView({
+      gateNotice.scrollIntoView({
         behavior: "smooth",
         block: "center"
       });
 
+    } else {
+
+      const invitation =
+        document.getElementById("invitation");
+
+      if (invitation) {
+
+        invitation.scrollIntoView({
+          behavior: "smooth",
+          block: "center"
+        });
+
+      }
+
     }
 
-
     setTimeout(() => {
-
       emailInput.focus();
-
     }, 650);
+  }
 
+
+  // =========================================================
+  // CHECK WHETHER EMAIL HAS BEEN VERIFIED
+  // =========================================================
+
+  function hasVerifiedEmail() {
+
+    const savedEmail =
+      localStorage.getItem("futuresmove_email");
+
+    return !!savedEmail;
   }
 
 
@@ -131,14 +86,15 @@ document.addEventListener("DOMContentLoaded", () => {
       event.preventDefault();
 
 
-      // Validate email
+      // =====================================================
+      // VALIDATE EMAIL
+      // =====================================================
 
       if (!emailInput.checkValidity()) {
 
         emailInput.reportValidity();
 
         return;
-
       }
 
 
@@ -154,20 +110,23 @@ document.addEventListener("DOMContentLoaded", () => {
 
 
       const submitButton =
-        form.querySelector(
-          "button"
-        );
+        form.querySelector("button");
+
+
+      if (!submitButton) {
+        return;
+      }
 
 
       const originalText =
         submitButton.innerHTML;
 
 
-      // Disable while processing
+      // =====================================================
+      // DISABLE SUBMIT WHILE VERIFYING
+      // =====================================================
 
-      submitButton.disabled =
-        true;
-
+      submitButton.disabled = true;
 
       submitButton.innerHTML =
         "Verifying email...";
@@ -175,46 +134,43 @@ document.addEventListener("DOMContentLoaded", () => {
 
       if (success) {
 
-        success.style.display =
-          "none";
+        success.style.display = "none";
 
       }
 
 
       try {
 
-        // =====================================================
+        // ===================================================
         // SEND EMAIL TO CLOUDFLARE
-        // =====================================================
+        // ===================================================
 
         const response =
           await fetch(
             "https://payment-gate.davamadeus8.workers.dev/access-request",
             {
-
               method: "POST",
 
               headers: {
-                "Content-Type":
-                  "application/json"
+                "Content-Type": "application/json"
               },
 
               body: JSON.stringify({
                 email: email
               })
-
             }
           );
 
 
-        // =====================================================
+        // ===================================================
         // CHECK CLOUDFLARE RESPONSE
-        // =====================================================
+        // ===================================================
 
         if (!response.ok) {
 
           throw new Error(
-            "Cloudflare request failed"
+            "Cloudflare request failed: " +
+            response.status
           );
 
         }
@@ -236,10 +192,9 @@ document.addEventListener("DOMContentLoaded", () => {
         }
 
 
-        // =====================================================
-        // ONLY AFTER CLOUDFLARE CONFIRMS
-        // SAVE EMAIL LOCALLY
-        // =====================================================
+        // ===================================================
+        // EMAIL CONFIRMED
+        // ===================================================
 
         localStorage.setItem(
           "futuresmove_email",
@@ -247,21 +202,18 @@ document.addEventListener("DOMContentLoaded", () => {
         );
 
 
-        // =====================================================
-        // SHOW SUCCESS
-        // =====================================================
+        // ===================================================
+        // SUCCESS MESSAGE
+        // ===================================================
 
         if (success) {
 
-          success.style.display =
-            "block";
+          success.style.display = "block";
 
           success.textContent =
             "✓ Email confirmed. Your membership options are now available.";
 
-          success.classList.remove(
-            "error"
-          );
+          success.classList.remove("error");
 
         }
 
@@ -272,31 +224,19 @@ document.addEventListener("DOMContentLoaded", () => {
 
         if (gateNotice) {
 
-          gateNotice.classList.remove(
-            "show"
-          );
+          gateNotice.classList.remove("show");
 
         }
 
 
-        // =====================================================
-        // UNLOCK PAYMENT BUTTONS
-        // =====================================================
-
-        setPaymentAccess(true);
-
-
-        // =====================================================
-        // MOVE USER TO MEMBERSHIP
-        // =====================================================
+        // ===================================================
+        // GO TO MEMBERSHIP
+        // ===================================================
 
         setTimeout(() => {
 
           const membership =
-            document.getElementById(
-              "membership"
-            );
-
+            document.getElementById("membership");
 
           if (membership) {
 
@@ -318,32 +258,24 @@ document.addEventListener("DOMContentLoaded", () => {
         );
 
 
-        // =====================================================
-        // FAILURE
-        // =====================================================
+        // ===================================================
+        // FAILED
+        // ===================================================
 
-        submitButton.disabled =
-          false;
-
+        submitButton.disabled = false;
 
         submitButton.innerHTML =
           originalText;
 
 
-        setPaymentAccess(false);
-
-
         if (success) {
 
-          success.style.display =
-            "block";
+          success.style.display = "block";
 
           success.textContent =
             "⚠️ We couldn't confirm your email. Please try again.";
 
-          success.classList.add(
-            "error"
-          );
+          success.classList.add("error");
 
         }
 
@@ -357,80 +289,76 @@ document.addEventListener("DOMContentLoaded", () => {
   // PAYMENT BUTTONS
   // =========================================================
 
-  paymentButtons.forEach(
-    (button) => {
+  paymentButtons.forEach((button) => {
 
-      button.addEventListener(
-        "click",
-        () => {
+    button.addEventListener(
+      "click",
+      (event) => {
 
-          // ===================================================
-          // DOUBLE CHECK EMAIL
-          // ===================================================
+        // ===================================================
+        // CHECK EMAIL FIRST
+        // ===================================================
 
-          const email =
-            localStorage.getItem(
-              "futuresmove_email"
-            );
+        if (!hasVerifiedEmail()) {
 
+          // Stop payment link from opening
+          event.preventDefault();
 
-          if (!email) {
+          requireEmail();
 
-            setPaymentAccess(false);
-
-            requireEmail();
-
-            return;
-
-          }
+          return;
+        }
 
 
-          // ===================================================
-          // GET PAYMENT LINK
-          // ===================================================
+        // ===================================================
+        // EMAIL EXISTS — ALLOW PAYMENT
+        // ===================================================
 
-          const link =
-            button.dataset.link;
-
-
-          const paymentType =
-            button.dataset.payment ||
-            "unknown";
+        const link =
+          button.dataset.link;
 
 
-          // ===================================================
-          // SAVE PAYMENT TYPE
-          // ===================================================
+        const paymentType =
+          button.dataset.payment ||
+          "unknown";
 
-          localStorage.setItem(
-            "futuresmove_payment_type",
-            paymentType
+
+        // Save payment method
+        localStorage.setItem(
+          "futuresmove_payment_type",
+          paymentType
+        );
+
+
+        // Save selected tier
+        localStorage.setItem(
+          "futuresmove_selected_tier",
+          paymentType
+        );
+
+
+        // ===================================================
+        // OPEN PAYMENT
+        // ===================================================
+
+        if (link) {
+
+          window.open(
+            link,
+            "_blank",
+            "noopener,noreferrer"
           );
 
-
-          // ===================================================
-          // OPEN PAYMENT
-          // ===================================================
-
-          if (link) {
-
-            window.open(
-              link,
-              "_blank",
-              "noopener,noreferrer"
-            );
-
-          }
-
         }
-      );
 
-    }
-  );
+      }
+    );
+
+  });
 
 
   // =========================================================
-  // RESTORE EMAIL SESSION
+  // RESTORE PREVIOUS EMAIL SESSION
   // =========================================================
 
   const savedEmail =
@@ -453,13 +381,13 @@ document.addEventListener("DOMContentLoaded", () => {
       success.textContent =
         "✓ Email confirmed. Your membership options are available.";
 
+      success.classList.remove("error");
+
     }
 
 
     const submitButton =
-      form.querySelector(
-        "button"
-      );
+      form.querySelector("button");
 
 
     if (submitButton) {
@@ -468,18 +396,6 @@ document.addEventListener("DOMContentLoaded", () => {
         "Email Confirmed ✓";
 
     }
-
-
-    setPaymentAccess(true);
-
-
-  } else {
-
-    // =======================================================
-    // FIRST VISIT
-    // =======================================================
-
-    setPaymentAccess(false);
 
   }
 
