@@ -4,7 +4,7 @@ const success = document.getElementById("emailSuccess");
 const gateNotice = document.getElementById("gateNotice");
 
 const PAYMENT_GATE_URL =
-  "https://payment-gate.davamadeus8.workers.dev/";
+  "https://payment-gate.davamadeus8.workers.dev/access-request";
 
 
 /* =========================================================
@@ -152,11 +152,6 @@ function requireEmail() {
     block: "center"
   });
 
-  /*
-   * Put the cursor directly into
-   * the email field after scrolling.
-   */
-
   setTimeout(() => {
 
     emailInput.focus();
@@ -174,7 +169,7 @@ document
   .querySelectorAll("[data-payment]")
   .forEach((button) => {
 
-    button.addEventListener("click", async () => {
+    button.addEventListener("click", () => {
 
       /* ---------------------------------------------------
          CHECK EMAIL FIRST
@@ -189,9 +184,8 @@ document
       /*
        * NO EMAIL
        *
-       * Do not open Copperx or Patreon.
-       * Send the visitor directly to the
-       * email field.
+       * Stop the payment process and
+       * send the visitor to the email field.
        */
 
       if (!email) {
@@ -280,16 +274,8 @@ document
 
 
       /* ---------------------------------------------------
-         NOTIFY CLOUDFLARE
+         SEND EMAIL + TIER + METHOD TO CLOUDFLARE
          --------------------------------------------------- */
-
-      /*
-       * We use fetch() here.
-       *
-       * IMPORTANT:
-       * We do NOT wait for this notification
-       * before opening the payment page.
-       */
 
       fetch(PAYMENT_GATE_URL, {
 
@@ -300,8 +286,6 @@ document
         },
 
         body: JSON.stringify({
-
-          type: "payment_attempt",
 
           email: email,
 
@@ -317,21 +301,31 @@ document
       })
       .then((response) => {
 
+        if (!response.ok) {
+
+          throw new Error(
+            "Cloudflare returned " +
+            response.status
+          );
+
+        }
+
         console.log(
-          "Payment attempt sent:",
-          response.status
+          "VIP access request sent successfully."
         );
 
       })
       .catch((error) => {
 
         /*
-         * Notification failure must NEVER
-         * stop the customer from paying.
+         * IMPORTANT:
+         * A Discord notification problem
+         * should NEVER stop the customer
+         * from reaching the payment page.
          */
 
         console.error(
-          "Payment notification failed:",
+          "VIP notification failed:",
           error
         );
 
@@ -339,7 +333,7 @@ document
 
 
       /* ---------------------------------------------------
-         OPEN PAYMENT PAGE IMMEDIATELY
+         OPEN PAYMENT PAGE
          --------------------------------------------------- */
 
       window.open(
@@ -354,7 +348,7 @@ document
 
 
 /* =========================================================
-   RESTORE EMAIL
+   RESTORE SAVED EMAIL
    ========================================================= */
 
 const savedEmail =
