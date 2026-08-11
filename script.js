@@ -1,686 +1,635 @@
-/* =========================================================
-   FUTURESMOVE — MAIN SCRIPT
-   ========================================================= */
+export default {
+
+  async fetch(request, env) {
+
+    /* =====================================================
+       CORS
+    ===================================================== */
+
+    const corsHeaders = {
+
+      "Access-Control-Allow-Origin": "*",
+
+      "Access-Control-Allow-Methods":
+        "POST, OPTIONS",
+
+      "Access-Control-Allow-Headers":
+        "Content-Type"
+
+    };
 
 
-/* =========================================================
-   ELEMENTS
-   ========================================================= */
+    /* =====================================================
+       PREFLIGHT
+    ===================================================== */
 
-const form = document.getElementById("emailForm");
-const emailInput = document.getElementById("email");
-const success = document.getElementById("emailSuccess");
-const gateNotice = document.getElementById("gateNotice");
+    if (
+      request.method === "OPTIONS"
+    ) {
 
-const paymentButtons =
-  document.querySelectorAll("[data-payment]");
+      return new Response(null, {
 
+        status: 204,
 
-/* =========================================================
-   EMAIL GATE / PAYMENT ACCESS
-   ========================================================= */
+        headers: corsHeaders
 
-function setPaymentAccess(unlocked) {
-
-  paymentButtons.forEach((button) => {
-
-    button.classList.toggle(
-      "locked",
-      !unlocked
-    );
-
-    button.setAttribute(
-      "aria-disabled",
-      String(!unlocked)
-    );
-
-    /*
-     * IMPORTANT:
-     * We intentionally DO NOT use:
-     *
-     * button.disabled = true
-     *
-     * because a locked button must still be clickable
-     * so we can send the visitor to the email field.
-     */
-
-  });
-
-}
-
-
-/* =========================================================
-   SHOW EMAIL GATE
-   ========================================================= */
-
-function requireEmail() {
-
-  /* Show the invitation notice */
-
-  if (gateNotice) {
-
-    gateNotice.classList.add("show");
-
-  }
-
-
-  /* Scroll to the email section */
-
-  const invitation =
-    document.getElementById("invitation");
-
-  if (invitation) {
-
-    invitation.scrollIntoView({
-      behavior: "smooth",
-      block: "center"
-    });
-
-  }
-
-
-  /*
-   * Put the cursor directly into the email field
-   * after the scrolling animation.
-   */
-
-  setTimeout(() => {
-
-    if (emailInput) {
-
-      emailInput.focus();
+      });
 
     }
 
-  }, 650);
 
-}
+    /* =====================================================
+       ONLY POST
+    ===================================================== */
 
+    if (
+      request.method !== "POST"
+    ) {
 
-/* =========================================================
-   EMAIL FORM
-   ========================================================= */
-
-if (form) {
-
-  form.addEventListener(
-    "submit",
-    (event) => {
-
-      event.preventDefault();
-
-
-      /*
-       * Use the browser's native email validation.
-       */
-
-      if (
-        !emailInput ||
-        !emailInput.checkValidity()
-      ) {
-
-        emailInput.reportValidity();
-
-        return;
-
-      }
-
-
-      /*
-       * Normalize the email.
-       */
-
-      const email =
-        emailInput.value
-          .trim()
-          .toLowerCase();
-
-
-      if (!email) {
-
-        return;
-
-      }
-
-
-      /*
-       * Remember the email locally.
-       *
-       * This is only for the website UX.
-       * Copperx remains the source of truth
-       * for payment verification.
-       */
-
-      localStorage.setItem(
-        "futuresmove_email",
-        email
+      return new Response(
+        "Method Not Allowed",
+        {
+          status: 405,
+          headers: corsHeaders
+        }
       );
 
-
-      /*
-       * Confirmation message.
-       */
-
-      if (success) {
-
-        success.style.display =
-          "block";
-
-      }
+    }
 
 
-      /*
-       * Change the form button.
-       */
+    try {
 
-      const submitButton =
-        form.querySelector("button");
+      /* ===================================================
+         READ REQUEST
+      =================================================== */
 
-      if (submitButton) {
-
-        submitButton.textContent =
-          "Email Confirmed ✓";
-
-      }
+      const body =
+        await request.text();
 
 
-      /*
-       * Hide the warning/gate message.
-       */
+      let data;
 
-      if (gateNotice) {
 
-        gateNotice.classList.remove(
-          "show"
+      try {
+
+        data =
+          JSON.parse(body);
+
+      } catch {
+
+        return new Response(
+          "Invalid JSON",
+          {
+            status: 400,
+            headers: corsHeaders
+          }
         );
 
       }
 
 
-      /*
-       * Unlock payment options.
-       */
+      /* ===================================================
+         WEBSITE PAYMENT ATTEMPT
+      =================================================== */
 
-      setPaymentAccess(true);
-
-
-      /*
-       * Move the visitor to membership.
-       */
-
-      setTimeout(() => {
-
-        const membership =
-          document.getElementById(
-            "membership"
-          );
-
-        if (membership) {
-
-          membership.scrollIntoView({
-            behavior: "smooth",
-            block: "start"
-          });
-
-        }
-
-      }, 300);
-
-    }
-  );
-
-}
-
-
-/* =========================================================
-   PAYMENT BUTTONS
-   ========================================================= */
-
-paymentButtons.forEach(
-  (button) => {
-
-    button.addEventListener(
-      "click",
-      () => {
-
-        /*
-         * Check whether the visitor
-         * has completed the email step.
-         */
+      if (
+        data.type ===
+        "payment_attempt"
+      ) {
 
         const email =
-          localStorage.getItem(
-            "futuresmove_email"
-          );
+          data.email ||
+          "Not provided";
 
 
-        /* -----------------------------------------
-           NO EMAIL
-           ----------------------------------------- */
+        const tier =
+          data.tier ||
+          "Unknown";
 
-        if (!email) {
 
-          /*
-           * Keep buttons visually locked.
-           */
+        const method =
+          data.method ||
+          "Unknown";
 
-          setPaymentAccess(false);
 
+        const discordPayload = {
 
-          /*
-           * Send visitor to email field.
-           */
+          username:
+            "FuturesMove Payments",
 
-          requireEmail();
 
+          embeds: [
 
-          return;
+            {
 
-        }
+              title:
+                "💳 NEW PAYMENT ATTEMPT",
 
 
-        /* -----------------------------------------
-           EMAIL EXISTS
-           ----------------------------------------- */
+              description:
+                "A visitor has started the VIP payment process.",
 
-        /*
-         * Identify which payment option
-         * the visitor selected.
-         */
 
-        const paymentType =
-          button.dataset.payment ||
-          "unknown";
+              fields: [
 
+                {
 
-        localStorage.setItem(
-          "futuresmove_payment_type",
-          paymentType
-        );
+                  name:
+                    "📧 Email",
 
+                  value:
+                    email,
 
-        /*
-         * Get the payment URL from HTML.
-         *
-         * Example:
-         *
-         * data-link="https://buy.copperx.io/..."
-         */
+                  inline: true
 
-        const link =
-          button.dataset.link;
+                },
 
 
-        if (!link) {
+                {
 
-          console.error(
-            "Payment link missing:",
-            paymentType
-          );
+                  name:
+                    "🏷️ Tier",
 
-          return;
+                  value:
+                    tier,
 
-        }
+                  inline: true
 
+                },
 
-        /*
-         * Prevent accidental double-clicks
-         * while opening the payment page.
-         */
 
-        button.classList.add(
-          "opening"
-        );
+                {
 
+                  name:
+                    "💰 Method",
 
-        /*
-         * Open payment in a new tab.
-         */
+                  value:
+                    method,
 
-        window.open(
-          link,
-          "_blank",
-          "noopener,noreferrer"
-        );
+                  inline: true
 
+                },
 
-        /*
-         * Restore button state shortly afterward.
-         */
 
-        setTimeout(() => {
+                {
 
-          button.classList.remove(
-            "opening"
-          );
+                  name:
+                    "⏳ Status",
 
-        }, 1200);
+                  value:
+                    "Waiting for payment verification",
 
-      }
-    );
+                  inline: false
 
-  }
-);
+                }
 
+              ],
 
-/* =========================================================
-   RESTORE PREVIOUS EMAIL SESSION
-   ========================================================= */
 
-const savedEmail =
-  localStorage.getItem(
-    "futuresmove_email"
-  );
+              footer: {
 
+                text:
+                  "Check Copperx before granting VIP access."
 
-if (savedEmail) {
+              },
 
-  /*
-   * Restore email.
-   */
 
-  if (emailInput) {
-
-    emailInput.value =
-      savedEmail;
-
-  }
-
-
-  /*
-   * Show confirmation.
-   */
-
-  if (success) {
-
-    success.style.display =
-      "block";
-
-  }
-
-
-  /*
-   * Update form button.
-   */
-
-  if (form) {
-
-    const submitButton =
-      form.querySelector("button");
-
-    if (submitButton) {
-
-      submitButton.textContent =
-        "Email Confirmed ✓";
-
-    }
-
-  }
-
-
-  /*
-   * Unlock membership.
-   */
-
-  setPaymentAccess(true);
-
-
-} else {
-
-  /*
-   * First visit:
-   * keep payment options visually locked.
-   */
-
-  setPaymentAccess(false);
-
-}
-
-
-/* =========================================================
-   SCROLL REVEAL ANIMATION
-   ========================================================= */
-
-const revealElements =
-  document.querySelectorAll(
-    ".reveal"
-  );
-
-
-if (
-  "IntersectionObserver" in window
-) {
-
-  const observer =
-    new IntersectionObserver(
-      (entries) => {
-
-        entries.forEach(
-          (entry) => {
-
-            if (
-              entry.isIntersecting
-            ) {
-
-              entry.target.classList.add(
-                "visible"
-              );
+              timestamp:
+                new Date().toISOString()
 
             }
+
+          ]
+
+        };
+
+
+        /* ===============================================
+           SEND ATTEMPT TO DISCORD
+        =============================================== */
+
+        const discordResponse =
+          await fetch(
+            env.DISCORD_WEBHOOK,
+            {
+
+              method:
+                "POST",
+
+              headers: {
+
+                "Content-Type":
+                  "application/json"
+
+              },
+
+              body:
+                JSON.stringify(
+                  discordPayload
+                )
+
+            }
+          );
+
+
+        if (
+          !discordResponse.ok
+        ) {
+
+          const discordError =
+            await discordResponse.text();
+
+
+          return new Response(
+
+            "Discord error: " +
+            discordError,
+
+            {
+
+              status: 502,
+
+              headers:
+                corsHeaders
+
+            }
+
+          );
+
+        }
+
+
+        return new Response(
+          "Payment attempt recorded",
+          {
+
+            status: 200,
+
+            headers:
+              corsHeaders
 
           }
         );
 
-      },
-      {
-        threshold: 0.12
       }
-    );
 
 
-  revealElements.forEach(
-    (element) => {
+      /* ===================================================
+         COPPERX WEBHOOK
+      =================================================== */
 
-      observer.observe(
-        element
-      );
-
-    }
-  );
-
-} else {
-
-  /*
-   * Fallback for older browsers.
-   */
-
-  revealElements.forEach(
-    (element) => {
-
-      element.classList.add(
-        "visible"
-      );
-
-    }
-  );
-
-}
+      const eventType =
+        data.type ||
+        "Unknown event";
 
 
-/* =========================================================
-   COMMUNITY COUNTERS
-   ========================================================= */
+      /* ===================================================
+         IGNORE COPPERX ENDPOINT TEST
+      =================================================== */
 
-const counters =
-  document.querySelectorAll(
-    ".counter"
-  );
+      if (
+        eventType ===
+        "webhook_endpoint_test"
+      ) {
 
+        return new Response(
+          "Webhook test received",
+          {
 
-if (
-  "IntersectionObserver" in window
-) {
+            status: 200,
 
-  const counterObserver =
-    new IntersectionObserver(
-      (entries, observer) => {
+            headers:
+              corsHeaders
 
-        entries.forEach(
-          (entry) => {
+          }
+        );
 
-            if (
-              !entry.isIntersecting
-            ) {
-
-              return;
-
-            }
+      }
 
 
-            const element =
-              entry.target;
+      /* ===================================================
+         EXTRACT COPPERX OBJECT
+      =================================================== */
+
+      const object =
+        data?.data?.object ||
+        data?.data ||
+        data?.object ||
+        {};
 
 
-            const target =
-              Number(
-                element.dataset.target
-              );
+      /* ===================================================
+         EMAIL
+      =================================================== */
+
+      const email =
+        object.email ||
+        object.customerEmail ||
+        object.customer?.email ||
+        "Not provided";
 
 
-            if (
-              Number.isNaN(target)
-            ) {
+      /* ===================================================
+         AMOUNT
+      =================================================== */
 
-              return;
-
-            }
-
-
-            const duration =
-              1200;
+      const amount =
+        object.amount ||
+        object.amountPaid ||
+        object.total ||
+        "Not provided";
 
 
-            const start =
-              performance.now();
+      /* ===================================================
+         CURRENCY
+      =================================================== */
+
+      const currency =
+        object.currency ||
+        object.currencyCode ||
+        object.asset ||
+        "Unknown";
 
 
-            function animate(
-              currentTime
-            ) {
+      /* ===================================================
+         STATUS
+      =================================================== */
 
-              const progress =
-                Math.min(
-                  (
-                    currentTime -
-                    start
-                  ) / duration,
-                  1
-                );
+      const status =
+        object.status ||
+        object.paymentStatus ||
+        "Unknown";
 
 
-              /*
-               * Smooth ease-out.
-               */
+      /* ===================================================
+         CHECKOUT ID
+      =================================================== */
 
-              const eased =
-                1 -
-                Math.pow(
-                  1 - progress,
-                  3
-                );
+      const checkoutId =
+        object.id ||
+        data.id ||
+        "Unknown";
 
 
-              element.textContent =
-                Math.floor(
-                  target * eased
-                );
+      /* ===================================================
+         PAYMENT LINK
+      =================================================== */
+
+      const paymentLink =
+        object.paymentLinkId ||
+        object.payment_link_id ||
+        object.paymentLink?.id ||
+        "";
 
 
-              if (
-                progress < 1
-              ) {
+      /* ===================================================
+         DETERMINE TIER
+      =================================================== */
 
-                requestAnimationFrame(
-                  animate
-                );
+      let tier =
+        "Unknown";
 
-              } else {
 
-                /*
-                 * Guarantee the exact
-                 * final number.
-                 */
+      if (
+        paymentLink ===
+        "7cb6c455-86f8-4d72-8985-ccf5ee45d866"
+      ) {
 
-                element.textContent =
-                  target;
+        tier =
+          "Chill Trader";
+
+      }
+
+
+      if (
+        paymentLink ===
+        "a9ac9a9f-0076-4863-819e-dcf617cd5028"
+      ) {
+
+        tier =
+          "Savage Trader";
+
+      }
+
+
+      /* ===================================================
+         COPPERX DISCORD MESSAGE
+      =================================================== */
+
+      const discordPayload = {
+
+        username:
+          "FuturesMove Payments",
+
+
+        embeds: [
+
+          {
+
+            title:
+              "💸 COPPERX PAYMENT EVENT",
+
+
+            description:
+              "Copperx has sent a new payment event.",
+
+
+            fields: [
+
+              {
+
+                name:
+                  "📧 Email",
+
+                value:
+                  email,
+
+                inline: true
+
+              },
+
+
+              {
+
+                name:
+                  "🏷️ Tier",
+
+                value:
+                  tier,
+
+                inline: true
+
+              },
+
+
+              {
+
+                name:
+                  "💰 Amount",
+
+                value:
+                  `${amount} ${currency}`,
+
+                inline: true
+
+              },
+
+
+              {
+
+                name:
+                  "📊 Status",
+
+                value:
+                  status,
+
+                inline: true
+
+              },
+
+
+              {
+
+                name:
+                  "⚡ Event",
+
+                value:
+                  eventType,
+
+                inline: true
+
+              },
+
+
+              {
+
+                name:
+                  "🆔 Checkout ID",
+
+                value:
+                  checkoutId,
+
+                inline: false
 
               }
 
-            }
+            ],
 
 
-            requestAnimationFrame(
-              animate
-            );
+            footer: {
+
+              text:
+                "FuturesMove • Verify payment in Copperx before granting access"
+
+            },
 
 
-            /*
-             * Only animate once.
-             */
+            timestamp:
+              new Date().toISOString()
 
-            observer.unobserve(
-              element
-            );
+          }
+
+        ]
+
+      };
+
+
+      /* ===================================================
+         SEND COPPERX EVENT TO DISCORD
+      =================================================== */
+
+      const discordResponse =
+        await fetch(
+          env.DISCORD_WEBHOOK,
+          {
+
+            method:
+              "POST",
+
+            headers: {
+
+              "Content-Type":
+                "application/json"
+
+            },
+
+            body:
+              JSON.stringify(
+                discordPayload
+              )
 
           }
         );
 
-      },
-      {
-        threshold: 0.6
+
+      if (
+        !discordResponse.ok
+      ) {
+
+        const discordError =
+          await discordResponse.text();
+
+
+        return new Response(
+
+          "Discord error: " +
+          discordError,
+
+          {
+
+            status: 502,
+
+            headers:
+              corsHeaders
+
+          }
+
+        );
+
       }
-    );
 
 
-  counters.forEach(
-    (counter) => {
+      /* ===================================================
+         SUCCESS
+      =================================================== */
 
-      counterObserver.observe(
-        counter
+      return new Response(
+        "OK",
+        {
+
+          status: 200,
+
+          headers:
+            corsHeaders
+
+        }
+      );
+
+
+    } catch (error) {
+
+      /* ===================================================
+         ERROR
+      =================================================== */
+
+      return new Response(
+
+        "Worker error: " +
+        error.toString(),
+
+        {
+
+          status: 500,
+
+          headers:
+            corsHeaders
+
+        }
+
       );
 
     }
-  );
 
-} else {
+  }
 
-  /*
-   * Fallback.
-   */
-
-  counters.forEach(
-    (counter) => {
-
-      counter.textContent =
-        counter.dataset.target;
-
-    }
-  );
-
-}
-
-
-/* =========================================================
-   DEBUG INFORMATION
-   ========================================================= */
-
-console.log(
-  "FuturesMove VIP system loaded."
-);
-
-console.log(
-  "Email gate:",
-  savedEmail
-    ? "UNLOCKED"
-    : "LOCKED"
-);
+};
